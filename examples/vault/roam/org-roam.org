@@ -1,0 +1,3 @@
+#+title: Org Roam
+
+Org-roam notes can be listed, read, written, appended, and searched through MCP.

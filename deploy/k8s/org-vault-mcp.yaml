@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: org-vault-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: org-vault-mcp
+  template:
+    metadata:
+      labels:
+        app: org-vault-mcp
+    spec:
+      containers:
+        - name: org-vault-mcp
+          image: org-syncd:latest
+          imagePullPolicy: IfNotPresent
+          args: ["mcp"]
+          env:
+            - name: ORG_ROOT
+              value: /org
+          volumeMounts:
+            - name: org-vault
+              mountPath: /org
+      volumes:
+        - name: org-vault
+          persistentVolumeClaim:
+            claimName: org-vault
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: org-vault
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

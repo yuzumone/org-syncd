@@ -11,12 +11,15 @@ import (
 	"github.com/yuzumone/org-syncd/internal/config"
 	"github.com/yuzumone/org-syncd/internal/couchdb"
 	"github.com/yuzumone/org-syncd/internal/logging"
+	"github.com/yuzumone/org-syncd/internal/mcpserver"
+	"github.com/yuzumone/org-syncd/internal/orgvault"
 	"github.com/yuzumone/org-syncd/internal/syncer"
 )
 
 var (
 	configPath string
 	dryRun     bool
+	orgRoot    string
 )
 
 func Execute() {
@@ -38,6 +41,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newDownloadOnlyCommand())
 	cmd.AddCommand(newSyncCommand())
 	cmd.AddCommand(newDaemonCommand())
+	cmd.AddCommand(newMCPCommand())
 	return cmd
 }
 
@@ -132,6 +136,26 @@ func newDaemonCommand() *cobra.Command {
 			return s.RunDaemon(ctx)
 		},
 	}
+}
+
+func newMCPCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mcp",
+		Short: "Run an Org vault MCP server over stdio",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			root := orgRoot
+			if root == "" {
+				root = orgvault.DefaultRoot()
+			}
+			vault, err := orgvault.New(root)
+			if err != nil {
+				return err
+			}
+			return mcpserver.New(vault, os.Stdin, os.Stdout).Serve()
+		},
+	}
+	cmd.Flags().StringVar(&orgRoot, "org-root", "", "org vault root directory (defaults to ORG_ROOT or ~/org)")
+	return cmd
 }
 
 func load() (config.Config, *slog.Logger, error) {
