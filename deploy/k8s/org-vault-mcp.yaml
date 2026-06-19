@@ -18,23 +18,21 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["mcp"]
           env:
-            - name: ORG_ROOT
-              value: /org
-          volumeMounts:
-            - name: org-vault
-              mountPath: /org
-      volumes:
-        - name: org-vault
-          persistentVolumeClaim:
-            claimName: org-vault
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: org-vault
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
+            - name: COUCHDB_URL
+              value: http://couchdb:5984
+            - name: COUCHDB_DATABASE
+              value: orgsync
+            - name: COUCHDB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: couchdb-auth
+                  key: username
+            - name: COUCHDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: couchdb-auth
+                  key: password
+            - name: DEVICE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name

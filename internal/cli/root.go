@@ -17,9 +17,13 @@ import (
 )
 
 var (
-	configPath string
-	dryRun     bool
-	orgRoot    string
+	configPath    string
+	dryRun        bool
+	mcpDeviceID   string
+	mcpCouchDBURL string
+	mcpDatabase   string
+	mcpUsername   string
+	mcpPassword   string
 )
 
 func Execute() {
@@ -143,19 +147,53 @@ func newMCPCommand() *cobra.Command {
 		Use:   "mcp",
 		Short: "Run an Org vault MCP server over stdio",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			root := orgRoot
-			if root == "" {
-				root = orgvault.DefaultRoot()
-			}
-			vault, err := orgvault.New(root)
+			vault, err := newMCPVault(cmd)
 			if err != nil {
 				return err
 			}
 			return mcpserver.New(vault, os.Stdin, os.Stdout).Serve()
 		},
 	}
-	cmd.Flags().StringVar(&orgRoot, "org-root", "", "org vault root directory (defaults to ORG_ROOT or ~/org)")
+	cmd.Flags().StringVar(&mcpDeviceID, "device-id", "", "device ID for CouchDB updated_by (defaults to DEVICE_ID or hostname)")
+	cmd.Flags().StringVar(&mcpCouchDBURL, "couchdb-url", "", "CouchDB URL for MCP (defaults to COUCHDB_URL)")
+	cmd.Flags().StringVar(&mcpDatabase, "database", "", "CouchDB database for MCP (defaults to COUCHDB_DATABASE, DATABASE, or orgsync)")
+	cmd.Flags().StringVar(&mcpUsername, "username", "", "CouchDB username for MCP (defaults to COUCHDB_USER or COUCHDB_USERNAME)")
+	cmd.Flags().StringVar(&mcpPassword, "password", "", "CouchDB password for MCP (defaults to COUCHDB_PASSWORD)")
 	return cmd
+}
+
+func newMCPVault(cmd *cobra.Command) (*orgvault.CouchDBBackend, error) {
+	couchURL := firstNonEmpty(mcpCouchDBURL, os.Getenv("COUCHDB_URL"))
+	if couchURL == "" {
+		return nil, fmt.Errorf("COUCHDB_URL or --couchdb-url is required")
+	}
+
+	database := firstNonEmpty(mcpDatabase, os.Getenv("COUCHDB_DATABASE"), os.Getenv("DATABASE"), "orgsync")
+	username := firstNonEmpty(mcpUsername, os.Getenv("COUCHDB_USER"), os.Getenv("COUCHDB_USERNAME"))
+	password := firstNonEmpty(mcpPassword, os.Getenv("COUCHDB_PASSWORD"))
+	deviceID := firstNonEmpty(mcpDeviceID, os.Getenv("DEVICE_ID"), hostname(), "mcp")
+	client, err := couchdb.New(couchURL, database, username, password)
+	if err != nil {
+		return nil, err
+	}
+	return orgvault.NewCouchDBBackend(client, deviceID), nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func hostname() string {
+	name, err := os.Hostname()
+	if err != nil {
+		return ""
+	}
+	return name
 }
 
 func load() (config.Config, *slog.Logger, error) {

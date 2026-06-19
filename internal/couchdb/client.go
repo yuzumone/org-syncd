@@ -21,6 +21,12 @@ type Client struct {
 	http     *http.Client
 }
 
+var ErrConflict = errors.New("couchdb document conflict")
+
+func IsConflict(err error) bool {
+	return errors.Is(err, ErrConflict)
+}
+
 func New(baseURL, database, username, password string) (*Client, error) {
 	u, err := url.Parse(strings.TrimRight(baseURL, "/"))
 	if err != nil {
@@ -94,6 +100,10 @@ func (c *Client) PutDoc(ctx context.Context, doc FileDoc) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusConflict {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("%w: id=%s body=%s", ErrConflict, doc.ID, string(body))
+	}
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return "", fmt.Errorf("put doc failed: id=%s status=%d body=%s", doc.ID, resp.StatusCode, string(body))

@@ -6,15 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/yuzumone/org-syncd/internal/orgvault"
 )
 
 type Server struct {
-	vault *orgvault.Service
+	vault *orgvault.CouchDBBackend
 	in    *bufio.Reader
 	out   io.Writer
 }
@@ -43,7 +41,7 @@ type toolCallParams struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-func New(vault *orgvault.Service, in io.Reader, out io.Writer) *Server {
+func New(vault *orgvault.CouchDBBackend, in io.Reader, out io.Writer) *Server {
 	return &Server{vault: vault, in: bufio.NewReader(in), out: out}
 }
 
@@ -204,34 +202,16 @@ func (s *Server) callTool(name string, args json.RawMessage) (any, error) {
 }
 
 func readMessage(r *bufio.Reader) ([]byte, error) {
-	length := -1
 	for {
-		line, err := r.ReadString('\n')
+		line, err := r.ReadBytes('\n')
+		line = bytes.TrimSpace(line)
+		if len(line) > 0 {
+			return line, nil
+		}
 		if err != nil {
 			return nil, err
 		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			break
-		}
-		name, value, ok := strings.Cut(line, ":")
-		if !ok {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
-			n, err := strconv.Atoi(strings.TrimSpace(value))
-			if err != nil {
-				return nil, err
-			}
-			length = n
-		}
 	}
-	if length < 0 {
-		return nil, fmt.Errorf("missing Content-Length")
-	}
-	msg := make([]byte, length)
-	_, err := io.ReadFull(r, msg)
-	return msg, err
 }
 
 func writeMessage(w io.Writer, payload any) error {
@@ -239,7 +219,8 @@ func writeMessage(w io.Writer, payload any) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(w, "Content-Length: %d\r\n\r\n%s", len(data), data)
+	data = append(data, '\n')
+	_, err = w.Write(data)
 	return err
 }
 
@@ -280,11 +261,11 @@ func tools() []map[string]any {
 		tool("read_note", "Read a note from the org vault.", map[string]any{
 			"path": stringProp("Vault-relative note path."),
 		}, []string{"path"}),
-		tool("write_note", "Create or replace a note with backup and atomic write.", map[string]any{
+		tool("write_note", "Create or replace a note in CouchDB using the latest document revision.", map[string]any{
 			"path":    stringProp("Vault-relative note path."),
 			"content": stringProp("UTF-8 note content."),
 		}, []string{"path", "content"}),
-		tool("append_note", "Append UTF-8 content to a note with backup and atomic write.", map[string]any{
+		tool("append_note", "Append UTF-8 content to a note in CouchDB. Retries once on revision conflict.", map[string]any{
 			"path":    stringProp("Vault-relative note path."),
 			"content": stringProp("UTF-8 content to append."),
 		}, []string{"path", "content"}),
