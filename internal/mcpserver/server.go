@@ -1,20 +1,25 @@
 package mcpserver
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/yuzumone/org-syncd/internal/orgvault"
 )
 
-type Server struct {
-	vault *orgvault.CouchDBBackend
-	in    *bufio.Reader
-	out   io.Writer
+type rpcServer struct {
+	vault VaultBackend
+}
+
+type VaultBackend interface {
+	ReadNote(path string) (orgvault.Note, error)
+	WriteNote(path, content string) (orgvault.WriteResult, error)
+	AppendNote(path, content string) (orgvault.WriteResult, error)
+	ListFolders() ([]orgvault.Folder, error)
+	ListNotes(opts orgvault.ListOptions) ([]orgvault.Note, error)
+	SearchNotes(opts orgvault.SearchOptions) ([]orgvault.Match, error)
 }
 
 type request struct {
@@ -41,44 +46,29 @@ type toolCallParams struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-func New(vault *orgvault.CouchDBBackend, in io.Reader, out io.Writer) *Server {
-	return &Server{vault: vault, in: bufio.NewReader(in), out: out}
-}
-
-func (s *Server) Serve() error {
-	for {
-		msg, err := readMessage(s.in)
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-		var req request
-		if err := json.Unmarshal(msg, &req); err != nil {
-			continue
-		}
-		if len(req.ID) == 0 {
-			continue
-		}
-		resp := response{JSONRPC: "2.0", ID: req.ID}
-		result, rpcErr := s.handle(req)
-		if rpcErr != nil {
-			resp.Error = rpcErr
-		} else {
-			resp.Result = result
-		}
-		if err := writeMessage(s.out, resp); err != nil {
-			return err
-		}
+func (s *rpcServer) process(req request) *response {
+	if len(req.ID) == 0 {
+		return nil
 	}
+	resp := &response{JSONRPC: "2.0", ID: req.ID}
+	result, rpcErr := s.handle(req)
+	if rpcErr != nil {
+		resp.Error = rpcErr
+	} else {
+		resp.Result = result
+	}
+	return resp
 }
 
-func (s *Server) handle(req request) (any, *rpcError) {
+func (s *rpcServer) handle(req request) (any, *rpcError) {
 	switch req.Method {
 	case "initialize":
+		var params struct {
+			ProtocolVersion string `json:"protocolVersion"`
+		}
+		_ = json.Unmarshal(req.Params, &params)
 		return map[string]any{
-			"protocolVersion": "2024-11-05",
+			"protocolVersion": selectProtocolVersion(params.ProtocolVersion),
 			"capabilities": map[string]any{
 				"tools": map[string]any{},
 			},
@@ -106,7 +96,16 @@ func (s *Server) handle(req request) (any, *rpcError) {
 	}
 }
 
-func (s *Server) callTool(name string, args json.RawMessage) (any, error) {
+func selectProtocolVersion(requested string) string {
+	for _, version := range httpProtocolVersions {
+		if requested == version {
+			return version
+		}
+	}
+	return httpProtocolVersions[0]
+}
+
+func (s *rpcServer) callTool(name string, args json.RawMessage) (any, error) {
 	switch name {
 	case "read_note":
 		var in struct {
@@ -199,29 +198,6 @@ func (s *Server) callTool(name string, args json.RawMessage) (any, error) {
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}
-}
-
-func readMessage(r *bufio.Reader) ([]byte, error) {
-	for {
-		line, err := r.ReadBytes('\n')
-		line = bytes.TrimSpace(line)
-		if len(line) > 0 {
-			return line, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-}
-
-func writeMessage(w io.Writer, payload any) error {
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-	_, err = w.Write(data)
-	return err
 }
 
 func decodeArgs(args json.RawMessage, out any) error {

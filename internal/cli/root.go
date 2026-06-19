@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/yuzumone/org-syncd/internal/config"
@@ -17,13 +21,8 @@ import (
 )
 
 var (
-	configPath    string
-	dryRun        bool
-	mcpDeviceID   string
-	mcpCouchDBURL string
-	mcpDatabase   string
-	mcpUsername   string
-	mcpPassword   string
+	configPath string
+	dryRun     bool
 )
 
 func Execute() {
@@ -145,33 +144,49 @@ func newDaemonCommand() *cobra.Command {
 func newMCPCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
-		Short: "Run an Org vault MCP server over stdio",
+		Short: "Run an Org vault MCP server over HTTP",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			vault, err := newMCPVault(cmd)
+			vault, err := newMCPVault()
 			if err != nil {
 				return err
 			}
-			return mcpserver.New(vault, os.Stdin, os.Stdout).Serve()
+			host := firstNonEmpty(os.Getenv("HOST"), "0.0.0.0")
+			port := firstNonEmpty(os.Getenv("PORT"), "8080")
+			handler, err := mcpserver.HTTPHandler(vault, os.Getenv("MCP_AUTH_TOKEN"))
+			if err != nil {
+				return err
+			}
+			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			listen := net.JoinHostPort(host, port)
+			server := &http.Server{Addr: listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+			go func() {
+				<-ctx.Done()
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				_ = server.Shutdown(shutdownCtx)
+			}()
+			slog.Info("MCP HTTP server started", "listen", listen, "path", mcpserver.EndpointPath)
+			err = server.ListenAndServe()
+			if err == http.ErrServerClosed {
+				return nil
+			}
+			return err
 		},
 	}
-	cmd.Flags().StringVar(&mcpDeviceID, "device-id", "", "device ID for CouchDB updated_by (defaults to DEVICE_ID or hostname)")
-	cmd.Flags().StringVar(&mcpCouchDBURL, "couchdb-url", "", "CouchDB URL for MCP (defaults to COUCHDB_URL)")
-	cmd.Flags().StringVar(&mcpDatabase, "database", "", "CouchDB database for MCP (defaults to COUCHDB_DATABASE, DATABASE, or orgsync)")
-	cmd.Flags().StringVar(&mcpUsername, "username", "", "CouchDB username for MCP (defaults to COUCHDB_USER or COUCHDB_USERNAME)")
-	cmd.Flags().StringVar(&mcpPassword, "password", "", "CouchDB password for MCP (defaults to COUCHDB_PASSWORD)")
 	return cmd
 }
 
-func newMCPVault(cmd *cobra.Command) (*orgvault.CouchDBBackend, error) {
-	couchURL := firstNonEmpty(mcpCouchDBURL, os.Getenv("COUCHDB_URL"))
+func newMCPVault() (*orgvault.CouchDBBackend, error) {
+	couchURL := os.Getenv("COUCHDB_URL")
 	if couchURL == "" {
-		return nil, fmt.Errorf("COUCHDB_URL or --couchdb-url is required")
+		return nil, fmt.Errorf("COUCHDB_URL is required")
 	}
 
-	database := firstNonEmpty(mcpDatabase, os.Getenv("COUCHDB_DATABASE"), os.Getenv("DATABASE"), "orgsync")
-	username := firstNonEmpty(mcpUsername, os.Getenv("COUCHDB_USER"), os.Getenv("COUCHDB_USERNAME"))
-	password := firstNonEmpty(mcpPassword, os.Getenv("COUCHDB_PASSWORD"))
-	deviceID := firstNonEmpty(mcpDeviceID, os.Getenv("DEVICE_ID"), hostname(), "mcp")
+	database := firstNonEmpty(os.Getenv("COUCHDB_DATABASE"), "orgsync")
+	username := os.Getenv("COUCHDB_USER")
+	password := os.Getenv("COUCHDB_PASSWORD")
+	deviceID := firstNonEmpty(os.Getenv("DEVICE_ID"), hostname(), "mcp")
 	client, err := couchdb.New(couchURL, database, username, password)
 	if err != nil {
 		return nil, err
