@@ -16,6 +16,23 @@ CouchDB
 
 CouchDB is the shared sync database. Local files remain the primary editing interface for Emacs/org-mode.
 
+The repository also contains a low-level Org vault MCP server:
+
+```
+AI client
+  ↕ MCP Streamable HTTP
+org-syncd mcp
+  ↕
+Org-mode / Org-roam vault
+```
+
+The MCP server is for safe note primitives only. Keep GTD, inbox cleanup,
+refile, project extraction, and other workflows outside the MCP tool layer;
+compose those in AI prompts, skills, or clients.
+
+MCP is CouchDB-only: `org-syncd mcp` reads and writes CouchDB directly, while
+local file sync remains a separate client/daemon concern.
+
 ## MVP Scope
 
 Implement a minimal, reliable sync daemon.
@@ -38,6 +55,65 @@ Implement a minimal, reliable sync daemon.
 - PDF/image attachment sync.
 - Full CRDT merge.
 - Org AST parsing.
+
+## Org Vault MCP Server
+
+Run with:
+
+```bash
+COUCHDB_URL=http://localhost:5984 COUCHDB_DATABASE=orgsync MCP_AUTH_TOKEN=secret org-syncd mcp
+```
+
+All MCP configuration is provided through environment variables. Do not add MCP
+configuration flags. `updated_by` selection order:
+
+1. `DEVICE_ID`
+2. hostname
+3. `mcp`
+
+### MCP tool scope
+
+Keep MCP tools workflow-neutral and close to file/vault operations.
+
+Implemented tools:
+
+- `read_note`: read one vault-relative note.
+- `write_note`: create or replace one note.
+- `append_note`: append content to one note.
+- `list_folders`: discover folders and note counts.
+- `list_notes`: list `.org` notes with optional filters.
+- `search_notes`: full-text search `.org` notes.
+
+Do not add workflow-specific tools such as:
+
+- `refile_to_project`
+- `extract_inbox_item`
+- `create_next_action`
+
+Future Org subtree operations are acceptable if they stay generic, for example
+read subtree, replace subtree, append subtree, or list headings.
+
+### MCP safety requirements
+
+- Never write CouchDB documents outside the existing org-syncd file document
+  model.
+- Reject `../` path traversal.
+- Reject or skip hidden paths by default.
+- Exclude `.backup` from list and search results.
+- Require UTF-8 content.
+- `write_note` fetches the latest `_rev` and overwrites that document.
+- `append_note` retries once on `_rev` conflict by re-reading the latest
+  document and appending again.
+- Keep the implementation usable over Streamable HTTP JSON-RPC MCP transport.
+- Keep the MCP endpoint fixed at `/mcp`.
+- Support password-gated OAuth 2.1 with DCR and PKCE S256. Keep direct static
+  bearer authentication for non-OAuth clients.
+- Advertise OAuth discovery through `WWW-Authenticate` on unauthorized MCP
+  requests.
+- Persist hashed OAuth client and token state under `DATA_DIR` using atomic
+  writes and owner-only file permissions. Kubernetes deployments use one
+  replica and a PVC for this state.
+- Reject requests to `/mcp` with a browser `Origin` header by default.
 
 ## Document Model
 
@@ -194,6 +270,10 @@ Add unit tests for:
 - conflict filename generation
 - config loading
 - ignored file matching
+- Org vault path safety
+- Org vault CouchDB write behavior
+- Org vault append conflict retry
+- Org vault listing and search over CouchDB documents
 
 Prefer table-driven Go tests.
 
@@ -217,6 +297,7 @@ Target commands:
 
 ```bash
 go run ./cmd --config config.yaml
+COUCHDB_URL=http://localhost:5984 go run ./cmd mcp
 go test ./...
 go build -o org-syncd ./cmd
 ```
@@ -228,6 +309,7 @@ org-syncd scan
 org-syncd download-only
 org-syncd sync --once
 org-syncd daemon
+org-syncd mcp
 ```
 
 ## Code Style

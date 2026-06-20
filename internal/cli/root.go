@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -152,16 +154,20 @@ func newMCPCommand() *cobra.Command {
 			}
 			host := firstNonEmpty(os.Getenv("HOST"), "0.0.0.0")
 			port := firstNonEmpty(os.Getenv("PORT"), "8080")
-			handler, err := mcpserver.HTTPHandler(vault, os.Getenv("MCP_AUTH_TOKEN"))
+			auth, err := newMCPAuth(port)
 			if err != nil {
 				return err
 			}
+			handler := mcpserver.HTTPHandler(vault, auth)
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			listen := net.JoinHostPort(host, port)
 			server := &http.Server{Addr: listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 			go func() {
 				<-ctx.Done()
+				if err := auth.Save(); err != nil {
+					slog.Error("failed to save OAuth state", "error", err)
+				}
 				shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				_ = server.Shutdown(shutdownCtx)
@@ -175,6 +181,32 @@ func newMCPCommand() *cobra.Command {
 		},
 	}
 	return cmd
+}
+
+func newMCPAuth(port string) (*mcpserver.OAuthProvider, error) {
+	refreshDays := 14
+	if value := os.Getenv("MCP_REFRESH_DAYS"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed <= 0 {
+			return nil, fmt.Errorf("MCP_REFRESH_DAYS must be a positive integer")
+		}
+		refreshDays = parsed
+	}
+	dataDir := os.Getenv("DATA_DIR")
+	if dataDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("resolve DATA_DIR: %w", err)
+		}
+		dataDir = filepath.Join(home, ".org-syncd")
+	}
+	baseURL := firstNonEmpty(os.Getenv("BASE_URL"), "http://localhost:"+port)
+	return mcpserver.NewOAuthProvider(mcpserver.OAuthConfig{
+		BaseURL:    baseURL,
+		Password:   os.Getenv("MCP_AUTH_TOKEN"),
+		DataDir:    dataDir,
+		RefreshTTL: time.Duration(refreshDays) * 24 * time.Hour,
+	})
 }
 
 func newMCPVault() (*orgvault.CouchDBBackend, error) {

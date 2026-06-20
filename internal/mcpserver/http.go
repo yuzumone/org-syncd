@@ -1,9 +1,7 @@
 package mcpserver
 
 import (
-	"crypto/subtle"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -17,17 +15,14 @@ const (
 var httpProtocolVersions = []string{"2025-06-18", "2025-03-26"}
 
 // HTTPHandler exposes the stateless JSON-RPC subset of MCP Streamable HTTP.
-func HTTPHandler(vault VaultBackend, authToken string) (http.Handler, error) {
-	if authToken == "" {
-		return nil, fmt.Errorf("HTTP MCP requires a non-empty auth token")
-	}
-
+func HTTPHandler(vault VaultBackend, auth *OAuthProvider) http.Handler {
 	mux := http.NewServeMux()
+	auth.RegisterRoutes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"status":"ok"}`)
 	})
-	mux.Handle(EndpointPath, bearerAuth(authToken, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle(EndpointPath, auth.Authenticate(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Origin") != "" {
 			http.Error(w, "browser origins are not allowed", http.StatusForbidden)
 			return
@@ -69,7 +64,7 @@ func HTTPHandler(vault VaultBackend, authToken string) (http.Handler, error) {
 		}
 		writeHTTPResponse(w, *resp)
 	})))
-	return mux, nil
+	return mux
 }
 
 func contains(values []string, value string) bool {
@@ -79,24 +74,6 @@ func contains(values []string, value string) bool {
 		}
 	}
 	return false
-}
-
-func bearerAuth(token string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authorization := r.Header.Get("Authorization")
-		if !strings.HasPrefix(authorization, "Bearer ") {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		provided := strings.TrimPrefix(authorization, "Bearer ")
-		if len(provided) != len(token) || subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 func writeHTTPResponse(w http.ResponseWriter, resp response) {

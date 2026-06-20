@@ -4,6 +4,8 @@ metadata:
   name: org-vault-mcp
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: org-vault-mcp
@@ -12,12 +14,28 @@ spec:
       labels:
         app: org-vault-mcp
     spec:
+      securityContext:
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: org-vault-mcp
           image: org-syncd:latest
           imagePullPolicy: IfNotPresent
           args: ["mcp"]
+          ports:
+            - name: http
+              containerPort: 8080
           env:
+            - name: HOST
+              value: 0.0.0.0
+            - name: PORT
+              value: "8080"
+            - name: BASE_URL
+              value: https://org-vault.example.com
+            - name: DATA_DIR
+              value: /data/org-syncd
+            - name: MCP_REFRESH_DAYS
+              value: "14"
             - name: COUCHDB_URL
               value: http://couchdb:5984
             - name: COUCHDB_DATABASE
@@ -36,3 +54,82 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: MCP_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: org-vault-mcp-auth
+                  key: token
+          volumeMounts:
+            - name: oauth-state
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+      volumes:
+        - name: oauth-state
+          persistentVolumeClaim:
+            claimName: org-vault-mcp-oauth
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: org-vault-mcp-oauth
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: org-vault-mcp
+spec:
+  selector:
+    app: org-vault-mcp
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: org-vault-mcp
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - org-vault.example.com
+      secretName: org-vault-mcp-tls
+  rules:
+    - host: org-vault.example.com
+      http:
+        paths:
+          - path: /mcp
+            pathType: Exact
+            backend:
+              service:
+                name: org-vault-mcp
+                port:
+                  name: http
+          - path: /oauth
+            pathType: Prefix
+            backend:
+              service:
+                name: org-vault-mcp
+                port:
+                  name: http
+          - path: /.well-known
+            pathType: Prefix
+            backend:
+              service:
+                name: org-vault-mcp
+                port:
+                  name: http

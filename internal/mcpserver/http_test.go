@@ -6,13 +6,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHTTPHandlerRequiresBearerToken(t *testing.T) {
-	handler, err := HTTPHandler(nil, "secret")
-	if err != nil {
-		t.Fatal(err)
-	}
+	handler := HTTPHandler(nil, newTestOAuthProvider(t))
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
@@ -23,10 +21,7 @@ func TestHTTPHandlerRequiresBearerToken(t *testing.T) {
 }
 
 func TestHTTPHandlerProcessesJSONRPC(t *testing.T) {
-	handler, err := HTTPHandler(nil, "secret")
-	if err != nil {
-		t.Fatal(err)
-	}
+	handler := HTTPHandler(nil, newTestOAuthProvider(t))
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer secret")
@@ -50,10 +45,7 @@ func TestHTTPHandlerProcessesJSONRPC(t *testing.T) {
 }
 
 func TestHTTPHandlerRejectsUnsupportedProtocolVersion(t *testing.T) {
-	handler, err := HTTPHandler(nil, "secret")
-	if err != nil {
-		t.Fatal(err)
-	}
+	handler := HTTPHandler(nil, newTestOAuthProvider(t))
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", "Bearer secret")
 	req.Header.Set("Content-Type", "application/json")
@@ -66,10 +58,7 @@ func TestHTTPHandlerRejectsUnsupportedProtocolVersion(t *testing.T) {
 }
 
 func TestHTTPHandlerAcceptsNotification(t *testing.T) {
-	handler, err := HTTPHandler(nil, "secret")
-	if err != nil {
-		t.Fatal(err)
-	}
+	handler := HTTPHandler(nil, newTestOAuthProvider(t))
 	body := `{"jsonrpc":"2.0","method":"notifications/initialized"}`
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer secret")
@@ -82,10 +71,7 @@ func TestHTTPHandlerAcceptsNotification(t *testing.T) {
 }
 
 func TestHTTPHandlerRejectsOrigin(t *testing.T) {
-	handler, err := HTTPHandler(nil, "secret")
-	if err != nil {
-		t.Fatal(err)
-	}
+	handler := HTTPHandler(nil, newTestOAuthProvider(t))
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", "Bearer secret")
 	req.Header.Set("Content-Type", "application/json")
@@ -95,4 +81,18 @@ func TestHTTPHandlerRejectsOrigin(t *testing.T) {
 	if res.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", res.Code, http.StatusForbidden)
 	}
+}
+
+func newTestOAuthProvider(t *testing.T) *OAuthProvider {
+	t.Helper()
+	provider, err := NewOAuthProvider(OAuthConfig{
+		BaseURL:    "http://localhost:8080",
+		Password:   "secret",
+		DataDir:    t.TempDir(),
+		RefreshTTL: 14 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return provider
 }

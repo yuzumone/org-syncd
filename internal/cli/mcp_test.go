@@ -31,3 +31,20 @@ func TestNewMCPVaultReadsEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNewMCPAuthReadsEnvironment(t *testing.T) {
+	t.Setenv("BASE_URL", "http://localhost:8080")
+	t.Setenv("MCP_AUTH_TOKEN", "secret")
+	t.Setenv("DATA_DIR", t.TempDir())
+	t.Setenv("MCP_REFRESH_DAYS", "7")
+	if _, err := newMCPAuth("8080"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNewMCPAuthRejectsInvalidRefreshDays(t *testing.T) {
+	t.Setenv("MCP_REFRESH_DAYS", "invalid")
+	if _, err := newMCPAuth("8080"); err == nil {
+		t.Fatal("expected MCP_REFRESH_DAYS error")
+	}
+}
