@@ -6,38 +6,36 @@ Local files remain the primary editing interface. CouchDB stores one document pe
 
 ## Configuration
 
-```yaml
-device_id: macbook
-local_dir: /Users/yuzumone/org
-couchdb_url: http://localhost:5984
-database: orgsync
-username: admin
-password: password
-poll_interval: 5s
-include_exts:
-  - .org
-  - .md
-  - .txt
-ignore:
-  - .git
-  - .DS_Store
-  - "*.tmp"
-```
+All commands are configured with environment variables. The sync commands use:
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `LOCAL_DIR` | Yes | - | Local directory to synchronize |
+| `COUCHDB_URL` | Yes | - | CouchDB server URL |
+| `COUCHDB_DATABASE` | No | `orgsync` | CouchDB database |
+| `COUCHDB_USER` | No | - | CouchDB username |
+| `COUCHDB_PASSWORD` | No | - | CouchDB password |
+| `DEVICE_ID` | No | hostname | Value stored in `updated_by` |
+| `POLL_INTERVAL` | No | `5s` | Go duration between daemon sync cycles |
+| `DRY_RUN` | No | `false` | Log planned writes without changing data |
+| `INCLUDE_EXTS` | No | `.org,.md,.txt` | Comma-separated file extensions |
+| `IGNORE` | No | `.git,.DS_Store,*.tmp` | Comma-separated ignore patterns |
+| `LOG_LEVEL` | No | `info` | Structured log level |
 
 ## Commands
 
 ```bash
-go run ./cmd --config config.yaml scan
-go run ./cmd --config config.yaml download-only
-go run ./cmd --config config.yaml sync
-go run ./cmd --config config.yaml daemon
+LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 go run ./cmd scan
+LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 go run ./cmd download-only
+LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 go run ./cmd sync
+LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 go run ./cmd daemon
 COUCHDB_URL=http://localhost:5984 go run ./cmd mcp
 ```
 
-Use `--dry-run` to log planned writes without changing CouchDB or local files.
+Set `DRY_RUN=true` to log planned writes without changing CouchDB or local files.
 
 ```bash
-go run ./cmd --config config.yaml --dry-run sync
+LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 DRY_RUN=true go run ./cmd sync
 ```
 
 ## Development

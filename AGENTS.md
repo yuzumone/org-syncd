@@ -146,28 +146,26 @@ Rules:
 
 ## Config
 
-Use YAML config.
+Use environment variables for every command. Do not add YAML configuration or
+configuration flags.
 
-Example:
+Sync configuration:
 
-```yaml
-device_id: macbook
-local_dir: /Users/yuzumone/org
-couchdb_url: http://localhost:5984
-database: orgsync
-username: admin
-password: password
-poll_interval: 5s
-dry_run: false
-include_exts:
-  - .org
-  - .md
-  - .txt
-ignore:
-  - .git
-  - .DS_Store
-  - "*.tmp"
+```bash
+DEVICE_ID=macbook
+LOCAL_DIR=/Users/yuzumone/org
+COUCHDB_URL=http://localhost:5984
+COUCHDB_DATABASE=orgsync
+COUCHDB_USER=admin
+COUCHDB_PASSWORD=password
+POLL_INTERVAL=5s
+DRY_RUN=false
+INCLUDE_EXTS=.org,.md,.txt
+IGNORE=.git,.DS_Store,*.tmp
+LOG_LEVEL=info
 ```
+
+`INCLUDE_EXTS` and `IGNORE` are comma-separated lists.
 
 ## Sync Behavior
 
@@ -296,7 +294,7 @@ Prefer table-driven Go tests.
 Target commands:
 
 ```bash
-go run ./cmd --config config.yaml
+LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 go run ./cmd sync
 COUCHDB_URL=http://localhost:5984 go run ./cmd mcp
 go test ./...
 go build -o org-syncd ./cmd

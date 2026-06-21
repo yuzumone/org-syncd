@@ -5,79 +5,52 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	DeviceID     string        `yaml:"device_id"`
-	LocalDir     string        `yaml:"local_dir"`
-	CouchDBURL   string        `yaml:"couchdb_url"`
-	Database     string        `yaml:"database"`
-	Username     string        `yaml:"username"`
-	Password     string        `yaml:"password"`
-	PollInterval time.Duration `yaml:"poll_interval"`
-	DryRun       bool          `yaml:"-"`
-	IncludeExts  []string      `yaml:"include_exts"`
-	Ignore       []string      `yaml:"ignore"`
-	LogLevel     string        `yaml:"log_level"`
+	DeviceID     string
+	LocalDir     string
+	CouchDBURL   string
+	Database     string
+	Username     string
+	Password     string
+	PollInterval time.Duration
+	DryRun       bool
+	IncludeExts  []string
+	Ignore       []string
+	LogLevel     string
 }
 
-type rawConfig struct {
-	DeviceID     string   `yaml:"device_id"`
-	LocalDir     string   `yaml:"local_dir"`
-	CouchDBURL   string   `yaml:"couchdb_url"`
-	Database     string   `yaml:"database"`
-	Username     string   `yaml:"username"`
-	Password     string   `yaml:"password"`
-	PollInterval string   `yaml:"poll_interval"`
-	IncludeExts  []string `yaml:"include_exts"`
-	Ignore       []string `yaml:"ignore"`
-	LogLevel     string   `yaml:"log_level"`
-}
-
-func Load(path string) (Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return Config{}, err
-	}
-
-	var raw rawConfig
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return Config{}, err
-	}
-
+func Load() (Config, error) {
 	cfg := Config{
-		DeviceID:    raw.DeviceID,
-		LocalDir:    raw.LocalDir,
-		CouchDBURL:  raw.CouchDBURL,
-		Database:    raw.Database,
-		Username:    raw.Username,
-		Password:    raw.Password,
-		IncludeExts: raw.IncludeExts,
-		Ignore:      raw.Ignore,
-		LogLevel:    raw.LogLevel,
+		DeviceID:     firstNonEmpty(os.Getenv("DEVICE_ID"), hostname()),
+		LocalDir:     os.Getenv("LOCAL_DIR"),
+		CouchDBURL:   os.Getenv("COUCHDB_URL"),
+		Database:     firstNonEmpty(os.Getenv("COUCHDB_DATABASE"), "orgsync"),
+		Username:     os.Getenv("COUCHDB_USER"),
+		Password:     os.Getenv("COUCHDB_PASSWORD"),
+		PollInterval: 5 * time.Second,
+		IncludeExts:  splitList(os.Getenv("INCLUDE_EXTS"), []string{".org", ".md", ".txt"}),
+		Ignore:       splitList(os.Getenv("IGNORE"), []string{".git", ".DS_Store", "*.tmp"}),
+		LogLevel:     firstNonEmpty(os.Getenv("LOG_LEVEL"), "info"),
 	}
 
-	if cfg.PollInterval == 0 {
-		cfg.PollInterval = 5 * time.Second
-	}
-	if raw.PollInterval != "" {
-		d, err := time.ParseDuration(raw.PollInterval)
+	if value := os.Getenv("POLL_INTERVAL"); value != "" {
+		d, err := time.ParseDuration(value)
 		if err != nil {
-			return Config{}, fmt.Errorf("parse poll_interval: %w", err)
+			return Config{}, fmt.Errorf("parse POLL_INTERVAL: %w", err)
 		}
 		cfg.PollInterval = d
 	}
-	if len(cfg.IncludeExts) == 0 {
-		cfg.IncludeExts = []string{".org", ".md", ".txt"}
-	}
-	if len(cfg.Ignore) == 0 {
-		cfg.Ignore = []string{".git", ".DS_Store", "*.tmp"}
-	}
-	if cfg.LogLevel == "" {
-		cfg.LogLevel = "info"
+	if value := os.Getenv("DRY_RUN"); value != "" {
+		dryRun, err := strconv.ParseBool(value)
+		if err != nil {
+			return Config{}, fmt.Errorf("parse DRY_RUN: %w", err)
+		}
+		cfg.DryRun = dryRun
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -91,21 +64,52 @@ func Load(path string) (Config, error) {
 	return cfg, nil
 }
 
+func splitList(value string, defaults []string) []string {
+	if value == "" {
+		return defaults
+	}
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if item := strings.TrimSpace(part); item != "" {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func hostname() string {
+	name, err := os.Hostname()
+	if err != nil {
+		return ""
+	}
+	return name
+}
+
 func (c Config) Validate() error {
 	if c.DeviceID == "" {
-		return errors.New("device_id is required")
+		return errors.New("DEVICE_ID is required when hostname is unavailable")
 	}
 	if c.LocalDir == "" {
-		return errors.New("local_dir is required")
+		return errors.New("LOCAL_DIR is required")
 	}
 	if c.CouchDBURL == "" {
-		return errors.New("couchdb_url is required")
+		return errors.New("COUCHDB_URL is required")
 	}
 	if c.Database == "" {
-		return errors.New("database is required")
+		return errors.New("COUCHDB_DATABASE is required")
 	}
 	if c.PollInterval <= 0 {
-		return errors.New("poll_interval must be positive")
+		return errors.New("POLL_INTERVAL must be positive")
 	}
 	return nil
 }

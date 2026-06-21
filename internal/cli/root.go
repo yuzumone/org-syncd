@@ -22,11 +22,6 @@ import (
 	"github.com/yuzumone/org-syncd/internal/syncer"
 )
 
-var (
-	configPath string
-	dryRun     bool
-)
-
 func Execute() {
 	if err := newRootCommand().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -39,9 +34,6 @@ func newRootCommand() *cobra.Command {
 		Use:   "org-syncd",
 		Short: "Sync org-mode text files with CouchDB",
 	}
-	cmd.PersistentFlags().StringVarP(&configPath, "config", "c", "config.yaml", "config file path")
-	cmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "log planned writes without changing CouchDB or local files")
-
 	cmd.AddCommand(newScanCommand())
 	cmd.AddCommand(newDownloadOnlyCommand())
 	cmd.AddCommand(newSyncCommand())
@@ -244,12 +236,9 @@ func hostname() string {
 }
 
 func load() (config.Config, *slog.Logger, error) {
-	cfg, err := config.Load(configPath)
+	cfg, err := config.Load()
 	if err != nil {
 		return config.Config{}, nil, err
-	}
-	if dryRun {
-		cfg.DryRun = true
 	}
 	log := logging.New(cfg.LogLevel)
 	return cfg, log, nil

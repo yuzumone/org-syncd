@@ -2,6 +2,15 @@ package cli
 
 import "testing"
 
+func TestRootCommandHasNoConfigurationFlags(t *testing.T) {
+	cmd := newRootCommand()
+	for _, name := range []string{"config", "dry-run"} {
+		if cmd.Flag(name) != nil {
+			t.Errorf("unexpected configuration flag --%s", name)
+		}
+	}
+}
+
 func TestMCPCommandHasNoConfigurationFlags(t *testing.T) {
 	cmd := newMCPCommand()
 	for _, name := range []string{
