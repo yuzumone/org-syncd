@@ -50,7 +50,7 @@ func (c *Client) EnsureDB(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusPreconditionFailed || resp.StatusCode == http.StatusAccepted {
 		return nil
 	}
@@ -67,7 +67,7 @@ func (c *Client) GetDoc(ctx context.Context, id string) (FileDoc, bool, error) {
 	if err != nil {
 		return FileDoc{}, false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return FileDoc{}, false, nil
 	}
@@ -99,7 +99,7 @@ func (c *Client) PutDoc(ctx context.Context, doc FileDoc) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusConflict {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return "", fmt.Errorf("%w: id=%s body=%s", ErrConflict, doc.ID, string(body))
@@ -126,7 +126,7 @@ func (c *Client) AllDocs(ctx context.Context) ([]FileDoc, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return nil, fmt.Errorf("all docs failed: status=%d body=%s", resp.StatusCode, string(body))
@@ -158,7 +158,7 @@ func (c *Client) Changes(ctx context.Context, since string) ([]FileDoc, string, 
 	if err != nil {
 		return nil, "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return nil, "", fmt.Errorf("changes failed: status=%d body=%s", resp.StatusCode, string(body))

@@ -27,7 +27,11 @@ func (w Watcher) Run(ctx context.Context, changed chan<- struct{}) error {
 	if err != nil {
 		return err
 	}
-	defer fsw.Close()
+	defer func() {
+		if err := fsw.Close(); err != nil {
+			w.log.Warn("failed to close watcher", "error", err)
+		}
+	}()
 
 	if err := w.addDirs(fsw); err != nil {
 		return err

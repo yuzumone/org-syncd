@@ -22,7 +22,7 @@ func AtomicWrite(localDir, relPath string, content []byte) error {
 		return err
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer func() { _ = os.Remove(tmpName) }()
 
 	if _, err := tmp.Write(content); err != nil {
 		_ = tmp.Close()

@@ -177,17 +177,17 @@ func (p *OAuthProvider) Save() error {
 		return fmt.Errorf("create OAuth state temp file: %w", err)
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer func() { _ = os.Remove(tmpName) }()
 	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("secure OAuth state temp file: %w", err)
 	}
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("write OAuth state: %w", err)
 	}
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("sync OAuth state: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
@@ -631,7 +631,7 @@ func normalizeBaseURL(value string) (string, error) {
 	if err != nil || u.Scheme == "" || u.Host == "" || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
 		return "", fmt.Errorf("BASE_URL must be an absolute origin without a path")
 	}
-	if u.Scheme != "https" && !(u.Scheme == "http" && isLoopbackHost(u.Hostname())) {
+	if u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname())) {
 		return "", fmt.Errorf("BASE_URL must use HTTPS unless it targets localhost")
 	}
 	return value, nil
