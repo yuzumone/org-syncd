@@ -45,11 +45,11 @@ go test ./...
 go build -o org-syncd ./cmd
 ```
 
-## Org Vault HTTP Server
+## org-syncd HTTP Server
 
 `org-syncd serve` runs a low-level MCP server over Streamable HTTP and a small
 REST API for safely reading, writing, listing, searching, and appending
-Org-mode vault files. It is intentionally workflow-neutral: GTD, inbox
+Org-mode files. It is intentionally workflow-neutral: GTD, inbox
 processing, and refile workflows should be built by the AI client, skills, or
 prompts using these primitives.
 
@@ -59,7 +59,7 @@ the existing org-syncd document model. Local file sync remains the job of
 
 For an Ingress-facing HTTP server, set a long random bearer token. The MCP
 endpoint is `POST /mcp`; `POST /api/files/append` appends UTF-8 content to a
-vault-relative file path; `GET /healthz` is available for Kubernetes probes.
+CouchDB file path; `GET /healthz` is available for Kubernetes probes.
 
 ```bash
 COUCHDB_URL=http://localhost:5984 \
@@ -103,7 +103,7 @@ For writes, `updated_by` is selected in this order:
 
 Available MCP tools:
 
-- `read_note`: read one vault-relative note path.
+- `read_note`: read one note by CouchDB file path.
 - `write_note`: create or replace a note. It fetches the latest `_rev` and
   overwrites that document.
 - `append_note`: append content to a note. It retries once on `_rev` conflict by
@@ -115,7 +115,7 @@ Available MCP tools:
 
 Available REST APIs:
 
-- `POST /api/files/append`: append UTF-8 content to a vault-relative file path.
+- `POST /api/files/append`: append UTF-8 content to a CouchDB file path.
 
 Example REST append request:
 
@@ -128,7 +128,7 @@ curl https://org-vault.example.com/api/files/append \
 
 Safety behavior:
 
-- Paths are vault-relative CouchDB document paths.
+- Paths are relative CouchDB file document paths.
 - `../`, hidden paths, and `.backup` paths are rejected or skipped.
 - Writes use documents shaped like `file:{path}` with `type=file`, `path`,
   `content`, `content_sha256`, `mtime`, `deleted=false`, and `updated_by`.

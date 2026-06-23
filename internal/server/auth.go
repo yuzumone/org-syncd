@@ -1,4 +1,4 @@
-package mcpserver
+package server
 
 import (
 	"bytes"
@@ -734,7 +734,7 @@ var approvalPage = template.Must(template.New("approval").Parse(`<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Authorize Org Vault</title>
+  <title>Authorize org-syncd</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 28rem; margin: 10vh auto; padding: 1.5rem; color: #202124; }
     h1 { font-size: 1.4rem; }
@@ -745,7 +745,7 @@ var approvalPage = template.Must(template.New("approval").Parse(`<!doctype html>
   </style>
 </head>
 <body>
-  <h1>Authorize Org Vault</h1>
+  <h1>Authorize org-syncd</h1>
   <p>{{if .Client}}{{.Client}} is requesting{{else}}A client is requesting{{end}} access to your Org vault.</p>
   {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
   <form method="post" action="/oauth/approve">

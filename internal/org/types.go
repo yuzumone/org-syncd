@@ -1,4 +1,4 @@
-package orgvault
+package org
 
 import "time"
 

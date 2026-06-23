@@ -1,4 +1,4 @@
-package mcpserver
+package server
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/yuzumone/org-syncd/internal/orgvault"
+	"github.com/yuzumone/org-syncd/internal/org"
 )
 
 type rpcServer struct {
@@ -14,12 +14,12 @@ type rpcServer struct {
 }
 
 type VaultBackend interface {
-	ReadNote(path string) (orgvault.Note, error)
-	WriteNote(path, content string) (orgvault.WriteResult, error)
-	AppendNote(path, content string) (orgvault.WriteResult, error)
-	ListFolders() ([]orgvault.Folder, error)
-	ListNotes(opts orgvault.ListOptions) ([]orgvault.Note, error)
-	SearchNotes(opts orgvault.SearchOptions) ([]orgvault.Match, error)
+	ReadNote(path string) (org.Note, error)
+	WriteNote(path, content string) (org.WriteResult, error)
+	AppendNote(path, content string) (org.WriteResult, error)
+	ListFolders() ([]org.Folder, error)
+	ListNotes(opts org.ListOptions) ([]org.Note, error)
+	SearchNotes(opts org.SearchOptions) ([]org.Match, error)
 }
 
 type request struct {
@@ -139,7 +139,7 @@ func (s *rpcServer) callTool(name string, args json.RawMessage) (any, error) {
 			return nil, err
 		}
 		return struct {
-			Folders []orgvault.Folder `json:"folders"`
+			Folders []org.Folder `json:"folders"`
 		}{Folders: folders}, nil
 	case "list_notes":
 		var in struct {
@@ -154,7 +154,7 @@ func (s *rpcServer) callTool(name string, args json.RawMessage) (any, error) {
 		if err := decodeArgs(args, &in); err != nil {
 			return nil, err
 		}
-		opts := orgvault.ListOptions{
+		opts := org.ListOptions{
 			Folder: in.Folder,
 			Name:   in.Name,
 			Tag:    in.Tag,
@@ -177,7 +177,7 @@ func (s *rpcServer) callTool(name string, args json.RawMessage) (any, error) {
 			return nil, err
 		}
 		return struct {
-			Notes []orgvault.Note `json:"notes"`
+			Notes []org.Note `json:"notes"`
 		}{Notes: notes}, nil
 	case "search_notes":
 		var in struct {
@@ -188,12 +188,12 @@ func (s *rpcServer) callTool(name string, args json.RawMessage) (any, error) {
 		if err := decodeArgs(args, &in); err != nil {
 			return nil, err
 		}
-		matches, err := s.vault.SearchNotes(orgvault.SearchOptions{Query: in.Query, Folder: in.Folder, Limit: in.Limit})
+		matches, err := s.vault.SearchNotes(org.SearchOptions{Query: in.Query, Folder: in.Folder, Limit: in.Limit})
 		if err != nil {
 			return nil, err
 		}
 		return struct {
-			Matches []orgvault.Match `json:"matches"`
+			Matches []org.Match `json:"matches"`
 		}{Matches: matches}, nil
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", name)
@@ -234,7 +234,7 @@ func invalidParams(err error) *rpcError {
 
 func tools() []map[string]any {
 	return []map[string]any{
-		tool("read_note", "Read a note from the org vault.", map[string]any{
+		tool("read_note", "Read a note by CouchDB file path.", map[string]any{
 			"path": stringProp("Vault-relative note path."),
 		}, []string{"path"}),
 		tool("write_note", "Create or replace a note in CouchDB using the latest document revision.", map[string]any{
@@ -245,8 +245,8 @@ func tools() []map[string]any {
 			"path":    stringProp("Vault-relative note path."),
 			"content": stringProp("UTF-8 content to append."),
 		}, []string{"path", "content"}),
-		tool("list_folders", "List folders in the org vault.", map[string]any{}, nil),
-		tool("list_notes", "List .org notes in the org vault.", map[string]any{
+		tool("list_folders", "List folders containing .org notes.", map[string]any{}, nil),
+		tool("list_notes", "List .org notes.", map[string]any{
 			"folder":         stringProp("Optional folder path."),
 			"name":           stringProp("Optional filename substring."),
 			"tag":            stringProp("Optional org tag."),

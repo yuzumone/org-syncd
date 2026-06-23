@@ -1,5 +1,0 @@
-#+title: Personal OS
-#+filetags: :system:
-
-* Tasks
-** TODO Keep MCP tools workflow-neutral :work:

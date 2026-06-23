@@ -16,14 +16,14 @@ CouchDB
 
 CouchDB is the shared sync database. Local files remain the primary editing interface for Emacs/org-mode.
 
-The repository also contains a low-level Org vault MCP server:
+The repository also contains a low-level org-syncd MCP and HTTP server:
 
 ```
 AI client
   ↕ MCP Streamable HTTP
 org-syncd serve
   ↕
-Org-mode / Org-roam vault
+Org-mode / Org-roam files in CouchDB
 ```
 
 The MCP server is for safe note primitives only. Keep GTD, inbox cleanup,
@@ -56,7 +56,7 @@ Implement a minimal, reliable sync daemon.
 - Full CRDT merge.
 - Org AST parsing.
 
-## Org Vault MCP Server
+## org-syncd HTTP Server
 
 Run with:
 
@@ -73,11 +73,11 @@ configuration flags. `updated_by` selection order:
 
 ### MCP tool scope
 
-Keep MCP tools workflow-neutral and close to file/vault operations.
+Keep MCP tools workflow-neutral and close to file operations.
 
 Implemented tools:
 
-- `read_note`: read one vault-relative note.
+- `read_note`: read one note by CouchDB file path.
 - `write_note`: create or replace one note.
 - `append_note`: append content to one note.
 - `list_folders`: discover folders and note counts.

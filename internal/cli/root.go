@@ -17,8 +17,8 @@ import (
 	"github.com/yuzumone/org-syncd/internal/config"
 	"github.com/yuzumone/org-syncd/internal/couchdb"
 	"github.com/yuzumone/org-syncd/internal/logging"
-	"github.com/yuzumone/org-syncd/internal/mcpserver"
-	"github.com/yuzumone/org-syncd/internal/orgvault"
+	"github.com/yuzumone/org-syncd/internal/org"
+	"github.com/yuzumone/org-syncd/internal/server"
 	"github.com/yuzumone/org-syncd/internal/syncer"
 )
 
@@ -150,11 +150,11 @@ func newServeCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			handler := mcpserver.HTTPHandler(vault, auth)
+			handler := server.HTTPHandler(vault, auth)
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			listen := net.JoinHostPort(host, port)
-			server := &http.Server{Addr: listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+			httpServer := &http.Server{Addr: listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 			go func() {
 				<-ctx.Done()
 				if err := auth.Save(); err != nil {
@@ -162,10 +162,10 @@ func newServeCommand() *cobra.Command {
 				}
 				shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				_ = server.Shutdown(shutdownCtx)
+				_ = httpServer.Shutdown(shutdownCtx)
 			}()
-			slog.Info("HTTP server started", "listen", listen, "mcp_path", mcpserver.EndpointPath, "rest_path", mcpserver.FilesAppendPath)
-			err = server.ListenAndServe()
+			slog.Info("HTTP server started", "listen", listen, "mcp_path", server.EndpointPath, "rest_path", server.FilesAppendPath)
+			err = httpServer.ListenAndServe()
 			if err == http.ErrServerClosed {
 				return nil
 			}
@@ -175,7 +175,7 @@ func newServeCommand() *cobra.Command {
 	return cmd
 }
 
-func newServeAuth(port string) (*mcpserver.OAuthProvider, error) {
+func newServeAuth(port string) (*server.OAuthProvider, error) {
 	refreshDays := 14
 	if value := os.Getenv("MCP_REFRESH_DAYS"); value != "" {
 		parsed, err := strconv.Atoi(value)
@@ -193,7 +193,7 @@ func newServeAuth(port string) (*mcpserver.OAuthProvider, error) {
 		dataDir = filepath.Join(home, ".org-syncd")
 	}
 	baseURL := firstNonEmpty(os.Getenv("BASE_URL"), "http://localhost:"+port)
-	return mcpserver.NewOAuthProvider(mcpserver.OAuthConfig{
+	return server.NewOAuthProvider(server.OAuthConfig{
 		BaseURL:    baseURL,
 		Password:   os.Getenv("MCP_AUTH_TOKEN"),
 		DataDir:    dataDir,
@@ -201,7 +201,7 @@ func newServeAuth(port string) (*mcpserver.OAuthProvider, error) {
 	})
 }
 
-func newServeVault() (*orgvault.CouchDBBackend, error) {
+func newServeVault() (*org.CouchDBBackend, error) {
 	couchURL := os.Getenv("COUCHDB_URL")
 	if couchURL == "" {
 		return nil, fmt.Errorf("COUCHDB_URL is required")
@@ -215,7 +215,7 @@ func newServeVault() (*orgvault.CouchDBBackend, error) {
 	if err != nil {
 		return nil, err
 	}
-	return orgvault.NewCouchDBBackend(client, deviceID), nil
+	return org.NewCouchDBBackend(client, deviceID), nil
 }
 
 func firstNonEmpty(values ...string) string {

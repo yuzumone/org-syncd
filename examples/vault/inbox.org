@@ -1,3 +1,0 @@
-#+title: Inbox
-
-* TODO Review org-vault MCP

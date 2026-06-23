@@ -1,4 +1,0 @@
-#+title: 2026-06-18
-
-* Notes
-MCP server MVP implementation day.

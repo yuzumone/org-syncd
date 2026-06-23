@@ -1,4 +1,4 @@
-package mcpserver
+package server
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yuzumone/org-syncd/internal/orgvault"
+	"github.com/yuzumone/org-syncd/internal/org"
 )
 
 func TestHTTPHandlerRequiresBearerToken(t *testing.T) {
@@ -100,7 +100,7 @@ func TestHTTPHandlerAppendsFile(t *testing.T) {
 	if vault.path != "inbox.org" || vault.content != "hello\n" {
 		t.Fatalf("append args = path %q content %q", vault.path, vault.content)
 	}
-	var got orgvault.WriteResult
+	var got org.WriteResult
 	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
 		t.Fatal(err)
 	}
@@ -165,28 +165,28 @@ type appendVault struct {
 	content string
 }
 
-func (v *appendVault) ReadNote(string) (orgvault.Note, error) {
-	return orgvault.Note{}, fmt.Errorf("not implemented")
+func (v *appendVault) ReadNote(string) (org.Note, error) {
+	return org.Note{}, fmt.Errorf("not implemented")
 }
 
-func (v *appendVault) WriteNote(string, string) (orgvault.WriteResult, error) {
-	return orgvault.WriteResult{}, fmt.Errorf("not implemented")
+func (v *appendVault) WriteNote(string, string) (org.WriteResult, error) {
+	return org.WriteResult{}, fmt.Errorf("not implemented")
 }
 
-func (v *appendVault) AppendNote(path, content string) (orgvault.WriteResult, error) {
+func (v *appendVault) AppendNote(path, content string) (org.WriteResult, error) {
 	v.path = path
 	v.content = content
-	return orgvault.WriteResult{Path: path, ModifiedAt: time.Date(2026, 6, 22, 0, 0, 0, 0, time.UTC)}, nil
+	return org.WriteResult{Path: path, ModifiedAt: time.Date(2026, 6, 22, 0, 0, 0, 0, time.UTC)}, nil
 }
 
-func (v *appendVault) ListFolders() ([]orgvault.Folder, error) {
+func (v *appendVault) ListFolders() ([]org.Folder, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (v *appendVault) ListNotes(orgvault.ListOptions) ([]orgvault.Note, error) {
+func (v *appendVault) ListNotes(org.ListOptions) ([]org.Note, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (v *appendVault) SearchNotes(orgvault.SearchOptions) ([]orgvault.Match, error) {
+func (v *appendVault) SearchNotes(org.SearchOptions) ([]org.Match, error) {
 	return nil, fmt.Errorf("not implemented")
 }
