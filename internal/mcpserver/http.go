@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	EndpointPath   = "/mcp"
-	maxRequestBody = 4 << 20
+	EndpointPath    = "/mcp"
+	FilesAppendPath = "/api/files/append"
+	maxRequestBody  = 4 << 20
 )
 
 var httpProtocolVersions = []string{"2025-06-18", "2025-03-26"}
@@ -22,6 +23,9 @@ func HTTPHandler(vault VaultBackend, auth *OAuthProvider) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"status":"ok"}`)
 	})
+	mux.Handle(FilesAppendPath, auth.Authenticate(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleFilesAppend(w, r, vault)
+	})))
 	mux.Handle(EndpointPath, auth.Authenticate(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Origin") != "" {
 			http.Error(w, "browser origins are not allowed", http.StatusForbidden)

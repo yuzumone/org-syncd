@@ -10,4 +10,4 @@ COPY --from=build /out/org-syncd /usr/local/bin/org-syncd
 COPY --from=build --chown=65532:65532 /out/data /data
 EXPOSE 8080
 ENTRYPOINT ["org-syncd"]
-CMD ["mcp"]
+CMD ["serve"]

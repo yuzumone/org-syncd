@@ -29,7 +29,7 @@ LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 go run ./cmd scan
 LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 go run ./cmd download-only
 LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 go run ./cmd sync
 LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 go run ./cmd daemon
-COUCHDB_URL=http://localhost:5984 go run ./cmd mcp
+COUCHDB_URL=http://localhost:5984 go run ./cmd serve
 ```
 
 Set `DRY_RUN=true` to log planned writes without changing CouchDB or local files.
@@ -45,19 +45,21 @@ go test ./...
 go build -o org-syncd ./cmd
 ```
 
-## Org Vault MCP Server
+## Org Vault HTTP Server
 
-`org-syncd mcp` runs a low-level MCP server over Streamable HTTP for safely
-reading, writing, listing, and searching an Org-mode vault. It is intentionally workflow-neutral:
-GTD, inbox processing, and refile workflows should be built by the AI client,
-skills, or prompts using these primitives.
+`org-syncd serve` runs a low-level MCP server over Streamable HTTP and a small
+REST API for safely reading, writing, listing, searching, and appending
+Org-mode vault files. It is intentionally workflow-neutral: GTD, inbox
+processing, and refile workflows should be built by the AI client, skills, or
+prompts using these primitives.
 
-The MCP server is CouchDB-first: it reads and writes CouchDB documents using the
-existing org-syncd document model. Local file sync remains the job of
+The HTTP server is CouchDB-first: it reads and writes CouchDB documents using
+the existing org-syncd document model. Local file sync remains the job of
 `org-syncd sync` or `org-syncd daemon`.
 
 For an Ingress-facing HTTP server, set a long random bearer token. The MCP
-endpoint is `POST /mcp`; `GET /healthz` is available for Kubernetes probes.
+endpoint is `POST /mcp`; `POST /api/files/append` appends UTF-8 content to a
+vault-relative file path; `GET /healthz` is available for Kubernetes probes.
 
 ```bash
 COUCHDB_URL=http://localhost:5984 \
@@ -67,7 +69,7 @@ BASE_URL=https://org-vault.example.com \
 DATA_DIR=./data \
 HOST=0.0.0.0 \
 PORT=8080 \
-go run ./cmd mcp
+go run ./cmd serve
 ```
 
 The server provides password-gated OAuth 2.1 with Dynamic Client Registration
@@ -77,7 +79,7 @@ the authorization page, where the user enters `MCP_AUTH_TOKEN`. Static
 `Authorization: Bearer <MCP_AUTH_TOKEN>` remains supported for curl and other
 non-OAuth clients. The MCP endpoint path is fixed at `/mcp`.
 
-MCP configuration is environment-only:
+HTTP server configuration is environment-only:
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
@@ -110,6 +112,19 @@ Available MCP tools:
 - `list_notes`: list `.org` notes with optional folder, name, tag, modified date,
   sort, order, and limit filters.
 - `search_notes`: case-insensitive full-text search over `.org` notes.
+
+Available REST APIs:
+
+- `POST /api/files/append`: append UTF-8 content to a vault-relative file path.
+
+Example REST append request:
+
+```bash
+curl https://org-vault.example.com/api/files/append \
+  -H 'Authorization: Bearer replace-with-a-long-random-token' \
+  -H 'Content-Type: application/json' \
+  --data '{"path":"inbox.org","content":"\n* TODO sample\n"}'
+```
 
 Safety behavior:
 
@@ -156,7 +171,7 @@ docker run --rm -p 8080:8080 \
   -e DATA_DIR=/data/org-syncd \
   -e HOST=0.0.0.0 \
   -e PORT=8080 \
-  org-syncd mcp
+  org-syncd serve
 ```
 
 The Kubernetes example at `deploy/k8s/org-vault-mcp.yaml` expects an

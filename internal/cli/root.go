@@ -38,7 +38,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newDownloadOnlyCommand())
 	cmd.AddCommand(newSyncCommand())
 	cmd.AddCommand(newDaemonCommand())
-	cmd.AddCommand(newMCPCommand())
+	cmd.AddCommand(newServeCommand())
 	return cmd
 }
 
@@ -135,18 +135,18 @@ func newDaemonCommand() *cobra.Command {
 	}
 }
 
-func newMCPCommand() *cobra.Command {
+func newServeCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "mcp",
-		Short: "Run an Org vault MCP server over HTTP",
+		Use:   "serve",
+		Short: "Run Org vault MCP and REST APIs over HTTP",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			vault, err := newMCPVault()
+			vault, err := newServeVault()
 			if err != nil {
 				return err
 			}
 			host := firstNonEmpty(os.Getenv("HOST"), "0.0.0.0")
 			port := firstNonEmpty(os.Getenv("PORT"), "8080")
-			auth, err := newMCPAuth(port)
+			auth, err := newServeAuth(port)
 			if err != nil {
 				return err
 			}
@@ -164,7 +164,7 @@ func newMCPCommand() *cobra.Command {
 				defer cancel()
 				_ = server.Shutdown(shutdownCtx)
 			}()
-			slog.Info("MCP HTTP server started", "listen", listen, "path", mcpserver.EndpointPath)
+			slog.Info("HTTP server started", "listen", listen, "mcp_path", mcpserver.EndpointPath, "rest_path", mcpserver.FilesAppendPath)
 			err = server.ListenAndServe()
 			if err == http.ErrServerClosed {
 				return nil
@@ -175,7 +175,7 @@ func newMCPCommand() *cobra.Command {
 	return cmd
 }
 
-func newMCPAuth(port string) (*mcpserver.OAuthProvider, error) {
+func newServeAuth(port string) (*mcpserver.OAuthProvider, error) {
 	refreshDays := 14
 	if value := os.Getenv("MCP_REFRESH_DAYS"); value != "" {
 		parsed, err := strconv.Atoi(value)
@@ -201,7 +201,7 @@ func newMCPAuth(port string) (*mcpserver.OAuthProvider, error) {
 	})
 }
 
-func newMCPVault() (*orgvault.CouchDBBackend, error) {
+func newServeVault() (*orgvault.CouchDBBackend, error) {
 	couchURL := os.Getenv("COUCHDB_URL")
 	if couchURL == "" {
 		return nil, fmt.Errorf("COUCHDB_URL is required")

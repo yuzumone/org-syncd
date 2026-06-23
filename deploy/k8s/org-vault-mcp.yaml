@@ -21,7 +21,7 @@ spec:
         - name: org-vault-mcp
           image: org-syncd:latest
           imagePullPolicy: IfNotPresent
-          args: ["mcp"]
+          args: ["serve"]
           ports:
             - name: http
               containerPort: 8080
@@ -120,6 +120,13 @@ spec:
                 port:
                   name: http
           - path: /oauth
+            pathType: Prefix
+            backend:
+              service:
+                name: org-vault-mcp
+                port:
+                  name: http
+          - path: /api
             pathType: Prefix
             backend:
               service:

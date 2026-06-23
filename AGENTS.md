@@ -21,7 +21,7 @@ The repository also contains a low-level Org vault MCP server:
 ```
 AI client
   ↕ MCP Streamable HTTP
-org-syncd mcp
+org-syncd serve
   ↕
 Org-mode / Org-roam vault
 ```
@@ -30,7 +30,7 @@ The MCP server is for safe note primitives only. Keep GTD, inbox cleanup,
 refile, project extraction, and other workflows outside the MCP tool layer;
 compose those in AI prompts, skills, or clients.
 
-MCP is CouchDB-only: `org-syncd mcp` reads and writes CouchDB directly, while
+MCP is CouchDB-only: `org-syncd serve` reads and writes CouchDB directly, while
 local file sync remains a separate client/daemon concern.
 
 ## MVP Scope
@@ -61,7 +61,7 @@ Implement a minimal, reliable sync daemon.
 Run with:
 
 ```bash
-COUCHDB_URL=http://localhost:5984 COUCHDB_DATABASE=orgsync MCP_AUTH_TOKEN=secret org-syncd mcp
+COUCHDB_URL=http://localhost:5984 COUCHDB_DATABASE=orgsync MCP_AUTH_TOKEN=secret org-syncd serve
 ```
 
 All MCP configuration is provided through environment variables. Do not add MCP
@@ -295,7 +295,7 @@ Target commands:
 
 ```bash
 LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 go run ./cmd sync
-COUCHDB_URL=http://localhost:5984 go run ./cmd mcp
+COUCHDB_URL=http://localhost:5984 go run ./cmd serve
 go test ./...
 go build -o org-syncd ./cmd
 ```
@@ -307,7 +307,7 @@ org-syncd scan
 org-syncd download-only
 org-syncd sync --once
 org-syncd daemon
-org-syncd mcp
+org-syncd serve
 ```
 
 ## Code Style
