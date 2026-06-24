@@ -33,29 +33,6 @@ compose those in AI prompts, skills, or clients.
 MCP is CouchDB-only: `org-syncd serve` reads and writes CouchDB directly, while
 local file sync remains a separate client/daemon concern.
 
-## MVP Scope
-
-Implement a minimal, reliable sync daemon.
-
-### Required features
-
-- Watch a configured local directory.
-- Sync `.org`, `.md`, `.txt` files.
-- Store each file as one CouchDB document.
-- Push local file changes to CouchDB.
-- Pull remote CouchDB changes to local files.
-- Detect basic conflicts.
-- Avoid infinite sync loops.
-- Support dry-run mode and download only.
-- Provide clear logs.
-
-### Out of scope for MVP
-
-- Binary file sync.
-- PDF/image attachment sync.
-- Full CRDT merge.
-- Org AST parsing.
-
 ## org-syncd HTTP Server
 
 Run with:
@@ -296,6 +273,7 @@ Target commands:
 ```bash
 LOCAL_DIR=~/org COUCHDB_URL=http://localhost:5984 go run ./cmd sync
 COUCHDB_URL=http://localhost:5984 go run ./cmd serve
+go run ./cmd version
 go test ./...
 go build -o org-syncd ./cmd
 ```
@@ -308,6 +286,7 @@ org-syncd download-only
 org-syncd sync --once
 org-syncd daemon
 org-syncd serve
+org-syncd version
 ```
 
 ## Code Style
@@ -319,12 +298,3 @@ org-syncd serve
 - Add timeouts to HTTP clients.
 - Do not introduce large frameworks.
 - Keep dependencies minimal.
-
-## Future Ideas
-
-After MVP:
-
-- Binary file support.
-- Per-file encryption.
-- Prometheus metrics.
-- Health check endpoint.

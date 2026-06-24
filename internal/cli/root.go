@@ -22,6 +22,8 @@ import (
 	"github.com/yuzumone/org-syncd/internal/syncer"
 )
 
+var version = "dev"
+
 func Execute() {
 	if err := newRootCommand().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -39,7 +41,20 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newSyncCommand())
 	cmd.AddCommand(newDaemonCommand())
 	cmd.AddCommand(newServeCommand())
+	cmd.AddCommand(newVersionCommand())
 	return cmd
+}
+
+func newVersionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the org-syncd version",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), version)
+			return err
+		},
+	}
 }
 
 func newScanCommand() *cobra.Command {

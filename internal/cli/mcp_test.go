@@ -1,6 +1,9 @@
 package cli
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestRootCommandHasNoConfigurationFlags(t *testing.T) {
 	cmd := newRootCommand()
@@ -30,6 +33,25 @@ func TestRootCommandUsesServeCommand(t *testing.T) {
 	}
 	if found, _, err := cmd.Find([]string{"mcp"}); err == nil && found.Name() == "mcp" {
 		t.Fatal("unexpected mcp command")
+	}
+}
+
+func TestVersionCommandPrintsVersion(t *testing.T) {
+	oldVersion := version
+	version = "0.1.0"
+	t.Cleanup(func() {
+		version = oldVersion
+	})
+
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"version"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := out.String(), "0.1.0\n"; got != want {
+		t.Fatalf("version output = %q, want %q", got, want)
 	}
 }
 
