@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -156,6 +157,25 @@ func TestOAuthRequiresHTTPSOutsideLocalhost(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected insecure BASE_URL error")
+	}
+}
+
+func TestSecureOAuthDataDirAllowsPermissionError(t *testing.T) {
+	err := secureOAuthDataDir("/data", func(string, os.FileMode) error {
+		return &os.PathError{Op: "chmod", Path: "/data", Err: os.ErrPermission}
+	})
+	if err != nil {
+		t.Fatalf("secureOAuthDataDir returned error: %v", err)
+	}
+}
+
+func TestSecureOAuthDataDirRejectsOtherErrors(t *testing.T) {
+	want := errors.New("disk error")
+	err := secureOAuthDataDir("/data", func(string, os.FileMode) error {
+		return want
+	})
+	if !errors.Is(err, want) {
+		t.Fatalf("secureOAuthDataDir error = %v, want %v", err, want)
 	}
 }
 

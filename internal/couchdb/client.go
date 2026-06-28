@@ -41,6 +41,17 @@ func New(baseURL, database, username, password string) (*Client, error) {
 	}, nil
 }
 
+func NewWithHTTPClient(baseURL, database, username, password string, httpClient *http.Client) (*Client, error) {
+	client, err := New(baseURL, database, username, password)
+	if err != nil {
+		return nil, err
+	}
+	if httpClient != nil {
+		client.http = httpClient
+	}
+	return client, nil
+}
+
 func (c *Client) EnsureDB(ctx context.Context) error {
 	req, err := c.newRequest(ctx, http.MethodPut, c.database, nil)
 	if err != nil {
@@ -59,7 +70,7 @@ func (c *Client) EnsureDB(ctx context.Context) error {
 }
 
 func (c *Client) GetDoc(ctx context.Context, id string) (FileDoc, bool, error) {
-	req, err := c.newRequest(ctx, http.MethodGet, c.database+"/"+url.PathEscape(id), nil)
+	req, err := c.newDocRequest(ctx, http.MethodGet, id, nil)
 	if err != nil {
 		return FileDoc{}, false, err
 	}
@@ -90,7 +101,7 @@ func (c *Client) PutDoc(ctx context.Context, doc FileDoc) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req, err := c.newRequest(ctx, http.MethodPut, c.database+"/"+url.PathEscape(doc.ID), bytes.NewReader(data))
+	req, err := c.newDocRequest(ctx, http.MethodPut, doc.ID, bytes.NewReader(data))
 	if err != nil {
 		return "", err
 	}
@@ -183,12 +194,29 @@ func (c *Client) Changes(ctx context.Context, since string) ([]FileDoc, string, 
 
 func (c *Client) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
 	u := *c.baseURL
+	u.RawPath = ""
 	if before, after, ok := strings.Cut(path, "?"); ok {
 		u.Path = strings.TrimRight(u.Path, "/") + "/" + before
 		u.RawQuery = after
 	} else {
 		u.Path = strings.TrimRight(u.Path, "/") + "/" + path
 	}
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
+	if err != nil {
+		return nil, err
+	}
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	return req, nil
+}
+
+func (c *Client) newDocRequest(ctx context.Context, method, id string, body io.Reader) (*http.Request, error) {
+	u := *c.baseURL
+	basePath := strings.TrimRight(u.Path, "/")
+	baseRawPath := strings.TrimRight(u.EscapedPath(), "/")
+	u.Path = basePath + "/" + c.database + "/" + id
+	u.RawPath = baseRawPath + "/" + url.PathEscape(c.database) + "/" + url.PathEscape(id)
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
 		return nil, err

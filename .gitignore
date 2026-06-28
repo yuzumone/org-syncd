@@ -1,4 +1,5 @@
 .cache/
+.gocache/
 org-syncd
 config.yaml
 dist

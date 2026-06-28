@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -18,11 +19,24 @@ type Watcher struct {
 	log      *slog.Logger
 }
 
+type Op string
+
+const (
+	OpWrite  Op = "write"
+	OpCreate Op = "create"
+	OpDelete Op = "delete"
+)
+
+type Event struct {
+	Path string
+	Op   Op
+}
+
 func New(localDir string, matcher files.Matcher, debounce time.Duration, log *slog.Logger) Watcher {
 	return Watcher{localDir: localDir, matcher: matcher, debounce: debounce, log: log}
 }
 
-func (w Watcher) Run(ctx context.Context, changed chan<- struct{}) error {
+func (w Watcher) Run(ctx context.Context, changed chan<- []Event) error {
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
@@ -41,7 +55,7 @@ func (w Watcher) Run(ctx context.Context, changed chan<- struct{}) error {
 	if !timer.Stop() {
 		<-timer.C
 	}
-	pending := false
+	pending := map[string]Event{}
 
 	for {
 		select {
@@ -58,21 +72,63 @@ func (w Watcher) Run(ctx context.Context, changed chan<- struct{}) error {
 			if event.Has(fsnotify.Create) {
 				w.addCreatedDir(fsw, event.Name)
 			}
-			if !w.shouldTrigger(event.Name) {
+			next, ok := w.eventFromFSNotify(event)
+			if !ok {
 				continue
 			}
-			pending = true
+			pending[next.Path] = next
 			resetTimer(timer, w.debounce)
 		case <-timer.C:
-			if pending {
-				pending = false
+			if len(pending) > 0 {
+				events := eventsFromPending(pending)
+				pending = map[string]Event{}
 				select {
-				case changed <- struct{}{}:
+				case changed <- events:
 				default:
 				}
 			}
 		}
 	}
+}
+
+func (w Watcher) eventFromFSNotify(event fsnotify.Event) (Event, bool) {
+	rel, err := files.NormalizeRelativePath(w.localDir, event.Name)
+	if err != nil {
+		return Event{}, false
+	}
+	if event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
+		if files.IsHiddenPath(rel) || w.matcher.Ignored(rel) {
+			return Event{}, false
+		}
+		return Event{Path: rel, Op: OpDelete}, true
+	}
+	if !w.matcher.Include(rel) {
+		return Event{}, false
+	}
+	if event.Has(fsnotify.Create) {
+		return Event{Path: rel, Op: OpCreate}, true
+	}
+	if event.Has(fsnotify.Write) || event.Has(fsnotify.Chmod) {
+		return Event{Path: rel, Op: OpWrite}, true
+	}
+	return Event{}, false
+}
+
+func eventsFromPending(pending map[string]Event) []Event {
+	events := make([]Event, 0, len(pending))
+	for _, event := range pending {
+		events = append(events, event)
+	}
+	slices.SortFunc(events, func(a, b Event) int {
+		if a.Path < b.Path {
+			return -1
+		}
+		if a.Path > b.Path {
+			return 1
+		}
+		return 0
+	})
+	return events
 }
 
 func (w Watcher) addDirs(fsw *fsnotify.Watcher) error {
@@ -118,14 +174,6 @@ func (w Watcher) addCreatedDir(fsw *fsnotify.Watcher, path string) {
 	if err := fsw.Add(path); err != nil {
 		w.log.Warn("watch add failed", "path", rel, "error", err)
 	}
-}
-
-func (w Watcher) shouldTrigger(path string) bool {
-	rel, err := files.NormalizeRelativePath(w.localDir, path)
-	if err != nil {
-		return false
-	}
-	return w.matcher.Include(rel)
 }
 
 func resetTimer(timer *time.Timer, d time.Duration) {
