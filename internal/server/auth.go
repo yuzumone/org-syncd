@@ -8,8 +8,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -112,7 +114,7 @@ func NewOAuthProvider(cfg OAuthConfig) (*OAuthProvider, error) {
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create DATA_DIR: %w", err)
 	}
-	if err := os.Chmod(cfg.DataDir, 0o700); err != nil {
+	if err := secureOAuthDataDir(cfg.DataDir, os.Chmod); err != nil {
 		return nil, fmt.Errorf("secure DATA_DIR: %w", err)
 	}
 
@@ -131,6 +133,17 @@ func NewOAuthProvider(cfg OAuthConfig) (*OAuthProvider, error) {
 		return nil, err
 	}
 	return p, nil
+}
+
+func secureOAuthDataDir(path string, chmod func(string, os.FileMode) error) error {
+	if err := chmod(path, 0o700); err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			slog.Warn("could not chmod DATA_DIR; continuing with existing directory permissions", "path", path, "error", err)
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (p *OAuthProvider) RegisterRoutes(mux *http.ServeMux) {
