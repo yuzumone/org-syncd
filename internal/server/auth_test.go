@@ -151,6 +151,44 @@ func TestOAuthRejectsUnsafeRedirectURI(t *testing.T) {
 	}
 }
 
+func TestOAuthAuthorizeKeepsInactiveClientForRefreshLifetime(t *testing.T) {
+	provider := newOAuthProviderForDir(t, t.TempDir())
+	handler := HTTPHandler(nil, provider)
+
+	registration := performRequest(handler, http.MethodPost, registerPath,
+		`{"redirect_uris":["http://127.0.0.1:9911/callback"],"client_name":"test client"}`,
+		map[string]string{"Content-Type": "application/json"})
+	if registration.Code != http.StatusCreated {
+		t.Fatalf("registration status = %d: %s", registration.Code, registration.Body.String())
+	}
+	var client struct {
+		ID string `json:"client_id"`
+	}
+	decodeRecorderJSON(t, registration, &client)
+
+	provider.mu.Lock()
+	registered := provider.clients[client.ID]
+	registered.CreatedAt = time.Now().Add(-(clientTTL + time.Hour))
+	provider.clients[client.ID] = registered
+	provider.mu.Unlock()
+
+	verifier := "test-code-verifier-with-enough-entropy-1234567890"
+	digest := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(digest[:])
+	authorizeURL := authorizePath + "?" + url.Values{
+		"response_type":         {"code"},
+		"client_id":             {client.ID},
+		"redirect_uri":          {"http://127.0.0.1:9911/callback"},
+		"code_challenge":        {challenge},
+		"code_challenge_method": {"S256"},
+		"resource":              {"http://localhost:8080/mcp"},
+	}.Encode()
+	authorize := performRequest(handler, http.MethodGet, authorizeURL, "", nil)
+	if authorize.Code != http.StatusOK {
+		t.Fatalf("authorize status = %d: %s", authorize.Code, authorize.Body.String())
+	}
+}
+
 func TestOAuthRequiresHTTPSOutsideLocalhost(t *testing.T) {
 	_, err := NewOAuthProvider(OAuthConfig{
 		BaseURL: "http://example.com", Password: "secret", DataDir: t.TempDir(), RefreshTTL: time.Hour,
