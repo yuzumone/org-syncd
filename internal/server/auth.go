@@ -607,10 +607,17 @@ func (p *OAuthProvider) cleanupLocked(now time.Time) {
 		}
 	}
 	for id, client := range p.clients {
-		if !activeClients[id] && now.Sub(client.CreatedAt) > clientTTL {
+		if !activeClients[id] && now.Sub(client.CreatedAt) > p.clientRetentionTTL() {
 			delete(p.clients, id)
 		}
 	}
+}
+
+func (p *OAuthProvider) clientRetentionTTL() time.Duration {
+	if p.refreshTTL > clientTTL {
+		return p.refreshTTL
+	}
+	return clientTTL
 }
 
 func (p *OAuthProvider) load() error {
